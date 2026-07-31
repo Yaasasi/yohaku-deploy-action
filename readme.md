@@ -1,86 +1,46 @@
 # Yohaku Deploy Action
 
-> **Note:** 本仓库已重命名为 **yohaku-deploy-action**（原名为 `shiroi-deploy-action`）。GitHub 会自动处理旧链接的重定向，原有 fork 和引用不受影响。
+> **Note:** 这是一个利用 GitHub Action 去构建私有版本站点并构建 Docker 镜像，随后推送到 GitHub Container Registry（GHCR）的工作流。
 
-这是一个利用 GitHub Action 去构建私有版本站点并部署到远程服务器的工作流。
+# 最近变更
 
-## Why?
-
-这里的项目关系现在更准确地说是：
-
-- [Yohaku](https://github.com/Innei/Yohaku) 是当前设计语言与视觉体系已经完全重构后的闭源完整实现。
-- [Shiro](https://github.com/Innei/Shiro) 是更早期的开源来源项目。
-- `Shiroi` 更接近 Yohaku 在大改版之前的历史阶段或兼容称呼；如果你需要旧设计风格，可以切换到 `Shiroi` 对应的历史版本。
-
-开源版本通常提供了预构建的 Docker 镜像或者编译产物可直接使用，但是当前私有完整实现并没有提供。
-
-因为 Next.js build 需要大量内存，很多服务器并吃不消这样的开销。
-
-因此这里提供利用 GitHub Action 去完成构建然后推送到服务器。
-
-你可以使用定时任务去定时更新 Yohaku，或部署旧风格的 Shiroi 历史版本。
-
-## 最近变更
-
-- **仓库重命名**：`shiroi-deploy-action` → `yohaku-deploy-action`。
-- **PR #17** 将默认源码仓库从 `innei-dev/shiroi` 修改为 `innei-dev/Yohaku`，以匹配当前主力项目。如果你在部署旧版 Shiroi，请将 `SOURCE_REPO` 改回 `innei-dev/shiroi`。
 - 工作流已通用化：源码仓库、构建命令、产物路径均可通过环境变量覆盖，详见下节「配置项」。
 
 ## How to
 
-开始之前，你的服务器首先需要安装 Node.js, npm, pnpm, pm2, sharp。
+这个工作流当前只负责：
 
-关于 sharp 的安装，你可以使用
+- 从私有源码仓库构建 Yohaku
+- 将构建产物打包成 Docker 镜像
+- 推送镜像到 GitHub Container Registry（GHCR）
+
+你只需要确保仓库 `Settings -> Secrets and variables -> Actions` 中包含下列 Secrets：
+
+- `GH_PAT`：用于访问私有源码仓库的 personal access token
+- `BASE_URL`：站点运行时的根 URL
+- `NEXT_PUBLIC_API_URL`：客户端访问的 API 根地址
+- `NEXT_PUBLIC_GATEWAY_URL`：客户端访问的网关地址
+
+构建完成后，镜像会推送到 GHCR，默认镜像名为：
+
+- `ghcr.io/${{ github.repository_owner }}/yohaku`
+
+可用以下方式拉取或运行：
 
 ```sh
-npm i -g sharp
+docker pull ghcr.io/<OWNER>/yohaku:latest
+# 或者使用具体 commit 标签
+# docker pull ghcr.io/<OWNER>/yohaku:sha-<commit-sha>
+
+docker run -d \
+  -e BASE_URL=https://example.com \
+  -e NEXT_PUBLIC_API_URL=https://example.com/api/v2 \
+  -e NEXT_PUBLIC_GATEWAY_URL=https://example.com \
+  -p 3000:3000 \
+  ghcr.io/<OWNER>/yohaku:latest
 ```
 
-sharp 不是必须的，但是在运行过程中会出现报错。参考：https://nextjs.org/docs/messages/sharp-missing-in-production
-
-在你的服务器家目录，新建 `yohaku` 的目录，然后新建 `.env` 填写你的变量。
-
-```
-# Env from your private Yohaku/Shiroi repo .env.template
-BASE_URL=
-
-NEXT_PUBLIC_API_URL=
-NEXT_PUBLIC_GATEWAY_URL=
-
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
-
-## Clerk
-CLERK_SECRET_KEY=
-
-NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
-NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
-NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/
-NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/
-
-TMDB_API_KEY=
-
-GH_TOKEN=
-```
-
-Fork 此项目，然后你需要填写下面的信息。
-
-## 历史版本参考
-
-如果你需要**部署旧版 Shiroi**，可直接回退到以下历史 commit，或参考当时的配置自行修改：
-
-| Commit | 说明 | 适用场景 |
-|--------|------|----------|
-| [`bc07cfa`](https://github.com/innei-dev/yohaku-deploy-action/commit/bc07cfa) | **PR #17 之前最后一个 Shiroi 版本**。默认源码仓库为 `innei-dev/shiroi`，部署目录 `~/shiro`，PM2 应用名 `Shiroi`，构建命令为 `sh ./ci-release-build.sh`。 | **推荐**：如果你只想直接使用旧版 Shiroi 的完整配置。 |
-| [`80466cf`](https://github.com/innei-dev/yohaku-deploy-action/commit/80466cf) | standalone + PM2 部署流程修复后的版本。引入了 `pm2/ecosystem.config.js` 模板，部署路径对齐为 `standalone/apps/web`。 | 如果你需要 standalone 部署模式的修复版本。 |
-| [`d495fef`](https://github.com/innei-dev/yohaku-deploy-action/commit/d495fef) | 最初加入 `rollback.sh` 的版本。 | 如果你想看最早的部署脚本实现。 |
-
-直接切换到 Shiroi 最后一个可用版本：
-
-```bash
-git clone https://github.com/innei-dev/yohaku-deploy-action.git
-cd yohaku-deploy-action
-git checkout bc07cfa
-```
+如果你希望推送的镜像能正常运行，还应同时准备你 Docker 镜像中运行时需要的环境变量，并在镜像部署到目标环境时注入它们。
 
 ---
 
@@ -111,13 +71,8 @@ git checkout bc07cfa
 
 ## Secrets
 
-- `HOST` 服务器地址
-- `USER` 服务器用户名
-- `PASSWORD` 服务器密码
-- `PORT` 服务器 SSH 端口
-- `KEY` 服务器 SSH Key（可选，密码 key 二选一）
-- `GH_PAT` 可访问当前私有源码仓库的 Github Token
-- `BASE_URL`、`NEXT_PUBLIC_API_URL`、`NEXT_PUBLIC_GATEWAY_URL` 供 CI 构建注入（见上一节；需与服务器 `.env` 一致）
+- `GH_PAT`：用于访问私有源码仓库的 Personal Access Token
+- `BASE_URL`、`NEXT_PUBLIC_API_URL`、`NEXT_PUBLIC_GATEWAY_URL`：供 CI 构建注入
 
 ### Github Token
 
@@ -129,12 +84,3 @@ git checkout bc07cfa
 ## Technical details
 
 参考：[跨仓库全自动构建项目并部署到服务器](./post.md)
-
-## Tips
-
-为了让 PM2 在服务器重启之后能够还原进程。可以使用：
-
-```sh
-pm2 startup
-pm2 save
-```
