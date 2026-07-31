@@ -21,6 +21,8 @@
 - `NEXT_PUBLIC_API_URL`：客户端访问的 API 根地址
 - `NEXT_PUBLIC_GATEWAY_URL`：客户端访问的网关地址
 
+你也可以在 GitHub Actions 页面手动重新运行该 workflow 来触发重新构建。
+
 构建完成后，镜像会推送到 GHCR，默认镜像名为：
 
 - `ghcr.io/${{ github.repository_owner }}/yohaku`
