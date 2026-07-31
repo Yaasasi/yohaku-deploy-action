@@ -186,6 +186,13 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
+      - name: Checkout deploy action repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.ref }}
+          persist-credentials: false
+
       # - name: Download artifact
       #   uses: actions/download-artifact@v4
       #   with:
